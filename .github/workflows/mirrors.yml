@@ -1,0 +1,62 @@
+name: Mirrors
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mirror from JSON
+        env:
+          GITEE_PERSONAL_TOKEN: ${{ secrets.GITEE_PERSONAL_TOKEN }}
+        run: |
+          echo "=========================================="
+          echo "开始镜像同步任务"
+          echo "时间: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="
+
+          total=$(jq '.repos | length' mirrors.json)
+          current=0
+
+          while read -r repo; do
+            current=$((current + 1))
+            src=$(echo "$repo" | jq -r '.src')
+            dst=$(echo "$repo" | jq -r '.dst')
+
+            echo ""
+            echo "=========================================="
+            echo "[$current/$total] 同步仓库"
+            echo "源: $src"
+            echo "目标: $dst"
+            echo "=========================================="
+
+            # 构造带认证的地址
+            AUTH_DST="https://siogian:${GITEE_PERSONAL_TOKEN}@$(echo "$dst" | sed 's|https://||')"
+
+            echo "[步骤 1/3] 克隆仓库中..."
+            git clone --bare --progress "$src" repo.git 2>&1 | grep -E '(Counting|Compressing|Receiving|Resolving|done)' || echo "克隆完成"
+            echo "克隆完成: $(date '+%Y-%m-%d %H:%M:%S')"
+
+            cd repo.git
+            echo ""
+            echo "[步骤 2/3] 推送到 Gitee..."
+            echo "这可能需要较长时间，请耐心等待..."
+            git push --mirror --progress "$AUTH_DST" 2>&1 | grep -E '(Counting|Compressing|Writing|done|To)' || echo "推送完成"
+            echo "推送完成: $(date '+%Y-%m-%d %H:%M:%S')"
+
+            cd ..
+            echo ""
+            echo "[步骤 3/3] 清理临时文件..."
+            rm -rf repo.git
+            echo "清理完成"
+            echo ""
+          done < <(jq -c '.repos[]' mirrors.json)
+
+          echo "=========================================="
+          echo "所有仓库同步完成！"
+          echo "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="

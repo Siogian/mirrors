@@ -1,0 +1,8 @@
+{
+  "repos": [
+    {
+      "src": "https://github.com/microsoft/vscode.git",
+      "dst": "https://gitee.com/xiaojian-mirrors/vscode"
+    }
+  ]
+}
